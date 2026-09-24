@@ -7,13 +7,16 @@ from datetime import (
     timedelta,
     timezone,
 )
+from pathlib import Path
 from typing import Literal, TypeAlias
 
 import click
 import pandas as pd
 from aw_core import Event
 
+from ..config import load_config
 from ..load.home_assistant import load_daily_df as load_ha_daily_df
+from ..load.home_assistant import load_daily_df_from_statistics as load_ha_statistics_daily_df
 from ..load.location import load_daily_df as load_location_daily_df
 from ..load.qslang import load_daily_df as load_drugs_df
 from ..load.whoop import load_cycles_df as load_whoop_cycles_df
@@ -118,10 +121,22 @@ def load_all_df(
 
     if "home_assistant" not in ignore:
         print("\n# Adding Home Assistant behaviors (sauna, CO2)")
-        # Optional source: only present when data.home_assistant is configured and
-        # the local HA SQLite DB exists. Skipped cleanly otherwise.
+        # Prefer long-term statistics export (full history) over the SQLite states
+        # table (purged after ~10 days). Fall back to SQLite when no export path is set.
         try:
-            df_ha = load_ha_daily_df()
+            config = load_config()
+            ha_stats_path_str = config.get("data", {}).get("ha_statistics_export")
+        except Exception:
+            ha_stats_path_str = None
+        try:
+            if ha_stats_path_str:
+                local_tz = config.get("data", {}).get("ha_local_tz")
+                df_ha = load_ha_statistics_daily_df(
+                    Path(ha_stats_path_str).expanduser(),
+                    local_tz=local_tz or None,
+                )
+            else:
+                df_ha = load_ha_daily_df()
         except (FileNotFoundError, KeyError) as e:
             logger.warning(f"Skipping home_assistant source: {e}")
         else:
