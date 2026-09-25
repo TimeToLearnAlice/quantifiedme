@@ -21,6 +21,7 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 
@@ -322,7 +323,7 @@ def aggregate_daily_features(
         if readings.empty:
             series[feat.name] = pd.Series(dtype="float64")
             continue
-        daily = readings.resample("D").agg(feat.agg)
+        daily = cast(pd.Series, readings.resample("D").agg(feat.agg))
         if feat.threshold is not None:
             # Boolean behavior; keep NaN where the day had no readings (not False).
             daily = daily.gt(feat.threshold).where(daily.notna())  # type: ignore[arg-type]
